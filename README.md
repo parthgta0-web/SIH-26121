@@ -1,90 +1,85 @@
 # NAMOWELL AI
 
-NAMOWELL AI is a local, decision-support prototype for Smart India Hackathon problem statement 26121: Nearby Wells Intelligence System (NWIS).
+NAMOWELL AI is a Smart India Hackathon team prototype for **Oil India's Nearby Wells Intelligence System (problem statement 26121)**. It gives reviewers a way to find relevant nearby wells, compare historical incidents by depth and formation, and trace extracted information back to the source report.
 
-> **Safety boundary:** All bundled records are deterministic synthetic demo data. Alerts describe historical hazard proximity only; they are not failure probabilities, drilling instructions, or an operational safety system.
+The app runs locally with a demonstration database. Its relevance scores and alert states help explain the demo workflow. They are unsuitable for operational drilling decisions.
 
-## Quick start
+## My contributions — Paarth Gupta
 
-### Backend
+I led the technical work and built the core system, from the data model and backend services to the dashboard workflows.
+
+- **Nearby-well ranking.** Built a deterministic scoring engine that combines geographic distance, formation match, depth overlap, trajectory, and event relevance. The API returns the score breakdown and missing factors so reviewers can see why a well ranks where it does.
+- **Depth correlation and alerting.** Built the workflow that compares replayed well depth against incident intervals in nearby wells. The app shows when an interval is upcoming, in range, or passed and links the alert to the supporting records.
+- **Report intake and review.** Implemented local PDF and TXT extraction, optional OCR for scanned PDFs, duplicate-file detection, and a review queue for candidate incidents. Each candidate retains a source page or line and a review status.
+- **API, dashboard, and evaluation.** Built the FastAPI and SQLAlchemy backend and connected it to a React dashboard with a Leaflet map, depth-correlation charts, incident filters, and replay controls. Added a benchmark view to examine alert precision, recall, lead distance, and processing latency on demo scenarios.
+
+## Try the demo
+
+1. Choose an active-well scenario on the dashboard. Open an offset-well row to inspect the score factors, missing fields, and provenance.
+2. Step through depth in the simulation controls. Compare the alert state and the corresponding historical interval in the depth chart.
+3. Open the incident explorer to filter by event type, severity, or formation and inspect the associated report evidence.
+4. Upload a sample PDF or TXT file in **Report Intake**. Review the extracted candidates and their source references.
+5. Open the benchmark view to replay a demo scenario and inspect its metrics.
+
+## How the ranking works
+
+The [offset engine](backend/app/services/offset_engine.py) applies a distance cutoff and scores the remaining candidates. These are the default demo weights:
+
+| Factor | Weight |
+| --- | ---: |
+| Geographic proximity | 25% |
+| Formation match | 30% |
+| Depth overlap | 20% |
+| Trajectory match | 10% |
+| Event relevance | 15% |
+
+Distance uses a linear decay within the search radius. Missing factors are excluded and the weights of the available factors are rescaled. The final score ranges from 0 to 100 and represents relative relevance within the prototype.
+
+## Run locally
+
+From the repository root, start the backend in PowerShell:
 
 ```powershell
-cd backend
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python ..\scripts\ingest_volve_data.py
-python ..\scripts\seed_database.py
-uvicorn app.main:app --reload --port 8000
+python -m pip install -r backend/requirements.txt
+python scripts/seed_database.py
+python -m uvicorn backend.app.main:app --reload --port 8000
 ```
 
-### Frontend
+In a second terminal, from the repository root:
 
 ```powershell
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-Open `http://localhost:5173`. The frontend defaults to `http://localhost:8000`; set `VITE_API_URL` in `frontend/.env` to override it.
+Open the [dashboard](http://localhost:5173) and the [interactive API docs](http://localhost:8000/docs). The frontend uses `http://localhost:8000` by default. Set `VITE_API_URL` in `frontend/.env` to use a different API address. OCR for scanned PDFs requires the Tesseract executable.
 
-## Demo flow
+## Code map
 
-1. Open the dashboard and select one of the three synthetic active-well scenarios.
-2. Review the ranked offsets and expand a row to see score factors, missing fields, and provenance.
-3. Use the depth stepper to cross a historical incident interval and observe the alert state change.
-4. Explore incidents, filter by severity or formation, and inspect source pages.
-5. Upload a PDF or TXT report. Text is extracted locally, then candidate incident lines are shown for review before insertion.
+| Path | What to look for |
+| --- | --- |
+| [`backend/app/services/`](backend/app/services) | Offset ranking, depth correlation, risk rules, and replay benchmarking |
+| [`backend/app/api/`](backend/app/api) | API routes for wells, incidents, telemetry, risk, and documents |
+| [`frontend/src/`](frontend/src) | React and TypeScript dashboards, Leaflet mapping, and Recharts visualizations |
+| [`data/`](data) | Demo fixtures and the dataset dictionary |
+| [`tests/`](tests) | API and domain tests for ranking, alerts, document handling, and data adapters |
 
-## Architecture
+Run the backend tests from the repository root with `python -m pytest`. Run the frontend tests from `frontend/` with `npm test`.
 
-- `backend/app`: FastAPI routes, SQLAlchemy models, deterministic scoring, alert engine, document extraction, and seed generation.
-- `frontend/src`: typed API client, responsive dashboard, Leaflet map, Recharts depth correlation, incident explorer, upload review, and simulation controls.
-- `data`: data dictionary and generated demo database location.
-- `tests`: backend unit and API tests.
+## Data and evaluation notes
 
-The core API is documented at `http://localhost:8000/docs`.
+- The default setup seeds generated scenarios from `data/synthetic/`. Some Volve-themed fixtures carry `is_synthetic: false` despite being generated. Treat their coordinate, incident, and report values as demo data.
+- [The optional Volve data notes](data/real/README.md) describe a separate public dataset workflow. The seeded demo uses no Oil India operational records.
+- Benchmark results reflect the replayed demo events. The experimental classifier reports a score on generated training data. It has no held-out field validation.
+- The prototype uses local SQLite storage and optional map tiles. Production eRTMAC integration and operational validation remain outside the demo.
 
-## API highlights
+## Documentation and credits
 
-- `GET /api/health`
-- `GET /api/scenarios`
-- `GET /api/dashboard?scenario_id=scenario-1`
-- `GET /api/wells?scenario_id=scenario-1&radius_km=20`
-- `GET /api/incidents?...filters...`
-- `GET /api/correlation?scenario_id=scenario-1`
-- `POST /api/simulation/{action}` where action is `start`, `pause`, `step`, or `reset`
-- `POST /api/documents/upload`
-- `GET /api/documents`
-- `GET /api/documents/{document_id}`
-- `POST /api/documents/{document_id}/extract`
-- `GET /api/documents/{document_id}/viewer`
-- `GET /api/search?q=kick`
-- `GET /api/wells/{well_id}/offsets?radius_km=20&target_depth_m=1200-1400&formation=Barail`
+- [Architecture notes](docs/architecture.md)
+- [Technical report source](docs/WellSage_NWIS_Technical_Report.tex)
+- [Data dictionary](data/data_dictionary.md)
 
-## Synthetic dataset schema
-
-`data/synthetic/` contains reproducible JSON for wells, formations, events, scenarios, and report metadata, plus watermarked TXT reports. `scripts/ingest_volve_data.py` uses seed `159` and targets the explicitly fictional **Equinor Volve Field Demo Region**. Demo records are explicitly marked synthetic in the database; no Oil India identifiers or real operational records are used.
-
-Events use `event_type`, `start_depth_m`, `end_depth_m`, `severity`, `description`, `recorded_mitigation`, `formation`, `source_document_id`, and `source_page`. Supported categories are `lost_circulation`, `kick`, `stuck_pipe`, `torque_drag`, `pressure_anomaly`, `cementing_issue`, `fishing`, and `npt`.
-
-Seeding is idempotent and preserves non-demo rows. `--reset` requires the explicit `--confirm-reset-demo` flag and only deletes rows marked synthetic or using demo IDs. Uploaded documents are hashed to reject duplicate imports. Extracted values remain `needs_review` with confidence scores; extraction is not verification.
-
-## Offset scoring example
-
-The offset endpoint accepts a depth range such as `target_depth_m=1200-1400`. Geographic proximity uses the documented linear decay `max(0, 1 - distance_km / radius_km)`. The prototype defaults are unvalidated demo weights: geographic `0.25`, formation `0.30`, depth `0.20`, trajectory `0.10`, and event relevance `0.15`. Missing features are removed from the denominator and the remaining weighted score is normalized to `0..100`; this is not a scientific risk or failure probability.
-
-## Tests
-
-```powershell
-pip install -r backend/requirements.txt
-pytest
-```
-
-The backend foundation is organized under `backend/app/core`, `backend/app/db`, `backend/app/models`, `backend/app/schemas`, `backend/app/api/routes`, `backend/app/services`, and `backend/app/repositories`. The current prototype uses a reliable `Base.metadata.create_all()` startup strategy for local/demo operation; replace it with Alembic revisions before production deployment. The canonical API contracts are paginated: `GET /api/wells`, `GET /api/wells/{well_id}`, `GET /api/wells/{well_id}/events`, and `GET /api/events/search`.
-
-## Limitations
-
-The demo uses synthetic coordinates, formations, events, and report text. Map tiles are optional: the interface still renders the well table and a coordinate plot when tiles are unavailable. SQLite FTS5 is used for local search. Image-only PDFs use optional `pytesseract` OCR when the Tesseract executable is installed; otherwise they remain `scanned_unreadable` and reviewable. Semantic search, Alembic migrations, and external LLMs remain outside this offline prototype.
-
-Before production deployment, add an authenticated eRTMAC adapter that maps the vendor stream into the `Telemetry` schema, replace the deterministic/demo ML baseline with models trained and validated on approved OIL data, configure durable document storage and OCR workers, and complete operational review/audit controls. The current system is a decision-support prototype: historical proximity alerts and model outputs are not drilling instructions or failure probabilities.
+Built as a team project for Smart India Hackathon. This fork preserves the team history from the [original SIH-26121 repository](https://github.com/rajkeshavmi4/SIH-26121).
